@@ -1,12 +1,13 @@
 # hotwatch
 
+[![Build Status](https://travis-ci.org/francesca64/hotwatch.svg?branch=master)](https://travis-ci.org/francesca64/hotwatch)
 [![Clippy Linting Result](https://clippy.bashy.io/github/francesca64/hotwatch/master/badge.svg)](https://clippy.bashy.io/github/francesca64/hotwatch/master/log)
+
+[Documentation](https://francesca64.github.io/hotwatch/docs/hotwatch)
 
 *hotwatch* is a Rust library for conveniently watching and handling file changes.
 
 Nightly Rust is required, since I used the box keyword a few times. Sorry.
-
-Real documentation is coming soon; I promise. In the mean time, have an example:
 
 ```rust
 use hotwatch::Hotwatch;
