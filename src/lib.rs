@@ -5,54 +5,127 @@
 extern crate notify;
 extern crate parking_lot;
 
-mod event;
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver};
 use parking_lot::Mutex;
 use notify::{RecommendedWatcher, Watcher};
-use event::event_from_notify;
 
-pub type Event = event::Event;
+#[derive(Debug)]
+pub struct Event {
+    pub path: String,
+    op_flags: u32
+}
+
+impl Event {
+    fn check(&self, op: notify::op::Op) -> bool {
+        let flag = op.bits();
+        self.op_flags & flag == flag
+    }
+
+    pub fn chmoded(&self) -> bool {
+        self.check(notify::op::CHMOD)
+    }
+
+    pub fn created(&self) -> bool {
+        self.check(notify::op::CREATE)
+    }
+
+    pub fn changed(&self) -> bool {
+        self.check(notify::op::WRITE)
+    }
+
+    pub fn removed(&self) -> bool {
+        self.check(notify::op::REMOVE)
+    }
+
+    pub fn renamed(&self) -> bool {
+        self.check(notify::op::RENAME)
+    }
+
+    pub fn ignored(&self) -> bool {
+        self.check(notify::op::IGNORED)
+    }
+}
+
+fn event_from_notify(e: notify::Event) -> Option<Event> {
+    if let notify::Event { path: Some(path), op: Ok(op) } = e {
+        if cfg!(debug_assertions) {
+            println!("{:?} {:?}", op, path);
+        }
+        path.to_str()
+            .map(|s| s.to_string())
+            .map(|s| Event {
+                path: s,
+                op_flags: op.bits()
+            })
+    } else {
+        None
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),
-    Notify(notify::Error),
-    Receive(std::sync::mpsc::RecvError)
+    Notify(notify::Error)
 }
 
 type HotwatchResult<T> = Result<T, Error>;
 
 type Handler = Box<Fn(Event) + Send>;
 type HandlerMapMutex = Arc<Mutex<HashMap<String, Handler>>>;
-type ErrorHandler = Box<Fn(Error) + Send>;
-type ErrorHandlerMutex = Arc<Mutex<ErrorHandler>>;
 
 pub struct Hotwatch {
     watcher: RecommendedWatcher,
     handler_map_mutex: HandlerMapMutex,
-    error_handler_mutex: ErrorHandlerMutex
 }
 
 impl Hotwatch {
+    /// Creates a new hotwatch instance.
+    ///
+    /// # Errors
+    ///
+    /// This function can fail if the underlying [notify](https://github.com/passcod/rsnotify)
+    /// instance fails to initialize. This will unfortunately expose you to notify's own error
+    /// type; hotwatch doesn't perfectly encapsulate this.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hotwatch::Hotwatch;
+    ///
+    /// let hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
+    /// ```
     pub fn new() -> HotwatchResult<Self> {
         let (tx, rx) = channel();
         let handler_map_mutex = Arc::new(Mutex::new(HashMap::new()));
-        let error_handler: ErrorHandler = box |e: Error| { println!("{:?}", e); };
-        let error_handler_mutex = Arc::new(Mutex::new(error_handler));
-        Hotwatch::run(handler_map_mutex.clone(), error_handler_mutex.clone(), rx);
+        Hotwatch::run(handler_map_mutex.clone(), rx);
         Watcher::new(tx)
             .map_err(Error::Notify)
             .map(|watcher| Hotwatch {
                 watcher: watcher,
                 handler_map_mutex: handler_map_mutex,
-                error_handler_mutex: error_handler_mutex
             })
     }
 
+    /// Watch a path and register a handler to it.
+    ///
+    /// Note that handlers will be run in hotwatch's watch thread, so you'll have to use `move`
+    /// if the closure captures anything.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hotwatch::Hotwatch;
+    ///
+    /// let mut hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
+    /// hotwatch.watch("README.md", |e: hotwatch::Event| {
+    ///  if e.changed() {
+    ///      println!("{} changed!", e.path);
+    ///    }
+    /// }).expect("Failed to watch file!");
+    /// ```
     pub fn watch<F>(&mut self, path: &str, handler: F) -> HotwatchResult<()>
     where F: 'static + Fn(Event) + Send {
         let mut handlers = self.handler_map_mutex.lock();
@@ -66,17 +139,7 @@ impl Hotwatch {
             })
     }
 
-    pub fn error_handler<F>(&mut self, handler: F)
-    where F: 'static + Fn(Error) + Send {
-        let mut error_handler = self.error_handler_mutex.lock();
-        *error_handler = box handler;
-    }
-
-    fn run(
-        handler_map_mutex: HandlerMapMutex,
-        error_handler_mutex: ErrorHandlerMutex,
-        rx: Receiver<notify::Event>
-    ) {
+    fn run(handler_map_mutex: HandlerMapMutex, rx: Receiver<notify::Event>) {
         std::thread::spawn(move || {
             loop {
                 match rx.recv() {
@@ -89,8 +152,9 @@ impl Hotwatch {
                         }
                     },
                     Err(e) => {
-                        let error_handler = error_handler_mutex.lock();
-                        (*error_handler)(Error::Receive(e));
+                        if cfg!(debug_assertions) {
+                            println!("Receiver error: {:?}", e);
+                        }
                     }
                 }
             }
