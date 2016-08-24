@@ -1,3 +1,11 @@
+//! hotwatch is a Rust library for conveniently watching and handling file changes.
+//!
+//! Watching is done on a separate thread to avoid blocking your enjoyment of life.
+//! All handlers are run on that thread as well, so keep that in mind when attempting to access
+//! outside data from within a handler.
+//!
+//! Nightly Rust is required, as hotwatch uses the box keyword internally.
+
 #![feature(box_syntax)]
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
