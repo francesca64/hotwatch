@@ -122,6 +122,11 @@ impl Hotwatch {
     /// Note that handlers will be run in hotwatch's watch thread, so you'll have to use `move`
     /// if the closure captures anything.
     ///
+    /// # Errors
+    ///
+    /// Watching will fail if the path can't be read, thus returning
+    /// a `hotwatch::Error::Io(std::io::Error)`.
+    ///
     /// # Examples
     ///
     /// ```
