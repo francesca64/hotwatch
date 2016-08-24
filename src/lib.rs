@@ -121,9 +121,9 @@ impl Hotwatch {
     ///
     /// let mut hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
     /// hotwatch.watch("README.md", |e: hotwatch::Event| {
-    ///  if e.changed() {
-    ///      println!("{} changed!", e.path);
-    ///    }
+    ///   if e.changed() {
+    ///     println!("{} changed!", e.path);
+    ///   }
     /// }).expect("Failed to watch file!");
     /// ```
     pub fn watch<F>(&mut self, path: &str, handler: F) -> HotwatchResult<()>
