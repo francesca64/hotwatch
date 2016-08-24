@@ -1,0 +1,12 @@
+[package]
+name = "hotwatch"
+version = "0.1.0"
+authors = ["Francesca Frangipane <francesca@comfysoft.net>"]
+
+[dependencies]
+clippy = { version = "*", optional = true }
+notify = "2.6"
+parking_lot = "0.2"
+
+[features]
+default = []
