@@ -2,9 +2,10 @@
 name = "hotwatch"
 version = "0.1.0"
 authors = ["Francesca Frangipane <francesca@comfysoft.net>"]
+keywords = ["notify", "watch", "events", "filesystem"]
 
 [dependencies]
-clippy = { version = "*", optional = true }
+clippy = { git = "https://github.com/Manishearth/rust-clippy", optional = true }
 notify = "2.6"
 parking_lot = "0.2"
 
