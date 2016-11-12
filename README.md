@@ -1,5 +1,6 @@
 # hotwatch
 
+[![Cargo Version](http://meritbadge.herokuapp.com/hotwatch)](https://crates.io/crates/hotwatch)
 [![Build Status](https://travis-ci.org/francesca64/hotwatch.svg?branch=master)](https://travis-ci.org/francesca64/hotwatch)
 [![Clippy Linting Result](https://clippy.bashy.io/github/francesca64/hotwatch/master/badge.svg)](https://clippy.bashy.io/github/francesca64/hotwatch/master/log)
 
@@ -14,8 +15,8 @@ use hotwatch::Hotwatch;
 
 let mut hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
 hotwatch.watch("war.png", |e: hotwatch::Event| {
-  if e.changed() {
-    println!("War has changed.");
-  }
+    if e.changed() {
+        println!("War has changed.");
+    }
 }).expect("Failed to watch file!");
 ```
