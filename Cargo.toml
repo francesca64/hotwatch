@@ -1,6 +1,6 @@
 [package]
 name = "hotwatch"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Francesca Frangipane <francesca@comfysoft.net>"]
 description = "A Rust library for conveniently watching and handling file changes."
 documentation = "https://francesca64.github.io/hotwatch/docs/hotwatch"
