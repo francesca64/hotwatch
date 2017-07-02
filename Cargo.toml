@@ -1,6 +1,6 @@
 [package]
 name = "hotwatch"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Francesca Frangipane <francesca@comfysoft.net>"]
 description = "A Rust library for conveniently watching and handling file changes."
 documentation = "https://francesca64.github.io/hotwatch/docs/hotwatch"
@@ -11,9 +11,5 @@ keywords = ["notify", "watch", "events", "filesystem"]
 license = "MIT"
 
 [dependencies]
-clippy = { version = "0.0", optional = true }
-notify = "2.6"
-parking_lot = "0.2"
-
-[features]
-default = []
+notify = "4.0"
+parking_lot = "0.4"

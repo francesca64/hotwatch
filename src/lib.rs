@@ -7,69 +7,31 @@
 //! Nightly Rust is required, as hotwatch uses the box keyword internally.
 
 #![feature(box_syntax)]
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
 
 extern crate notify;
 extern crate parking_lot;
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
+
 use parking_lot::Mutex;
-use notify::{RecommendedWatcher, Watcher};
+use notify::{RecommendedWatcher, Watcher, RecursiveMode};
 
-#[derive(Debug)]
-pub struct Event {
-    pub path: String,
-    op_flags: u32
-}
+pub use notify::DebouncedEvent as Event;
 
-impl Event {
-    fn check(&self, op: notify::op::Op) -> bool {
-        let flag = op.bits();
-        self.op_flags & flag == flag
-    }
-
-    pub fn chmoded(&self) -> bool {
-        self.check(notify::op::CHMOD)
-    }
-
-    pub fn created(&self) -> bool {
-        self.check(notify::op::CREATE)
-    }
-
-    pub fn changed(&self) -> bool {
-        self.check(notify::op::WRITE)
-    }
-
-    pub fn removed(&self) -> bool {
-        self.check(notify::op::REMOVE)
-    }
-
-    pub fn renamed(&self) -> bool {
-        self.check(notify::op::RENAME)
-    }
-
-    pub fn ignored(&self) -> bool {
-        self.check(notify::op::IGNORED)
-    }
-}
-
-fn event_from_notify(e: notify::Event) -> Option<Event> {
-    if let notify::Event { path: Some(path), op: Ok(op) } = e {
-        if cfg!(debug_assertions) {
-            println!("{:?} {:?}", op, path);
-        }
-        path.to_str()
-            .map(|s| s.to_string())
-            .map(|s| Event {
-                path: s,
-                op_flags: op.bits()
-            })
-    } else {
-        None
+fn path_from_event(e: &Event) -> Option<PathBuf> {
+    match e {
+        &Event::NoticeWrite(ref p) |
+        &Event::NoticeRemove(ref p) |
+        &Event::Create(ref p) |
+        &Event::Write(ref p) |
+        &Event::Chmod(ref p) |
+        &Event::Remove(ref p) |
+        &Event::Rename(ref p, _) => Some(p.clone()),
+        &_ => None
     }
 }
 
@@ -94,7 +56,7 @@ impl Hotwatch {
     ///
     /// # Errors
     ///
-    /// This function can fail if the underlying [notify](https://github.com/passcod/rsnotify)
+    /// This function can fail if the underlying [notify](https://docs.rs/notify/4.0.1/notify/)
     /// instance fails to initialize. This will unfortunately expose you to notify's own error
     /// type; hotwatch doesn't perfectly encapsulate this.
     ///
@@ -109,7 +71,7 @@ impl Hotwatch {
         let (tx, rx) = channel();
         let handler_map_mutex = Arc::new(Mutex::new(HashMap::new()));
         Hotwatch::run(handler_map_mutex.clone(), rx);
-        Watcher::new(tx)
+        Watcher::new(tx, Duration::from_secs(2))
             .map_err(Error::Notify)
             .map(|watcher| Hotwatch {
                 watcher: watcher,
@@ -130,19 +92,19 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::Hotwatch;
+    /// use hotwatch::{Hotwatch, Event};
     ///
     /// let mut hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
-    /// hotwatch.watch("README.md", |e: hotwatch::Event| {
-    ///     if e.changed() {
-    ///         println!("{} changed!", e.path);
+    /// hotwatch.watch("README.md", |e: Event| {
+    ///     if let Event::Write(path) = e {
+    ///         println!("{:?} changed!", path);
     ///     }
     /// }).expect("Failed to watch file!");
     /// ```
     pub fn watch<F>(&mut self, path: &str, handler: F) -> HotwatchResult<()>
     where F: 'static + Fn(Event) + Send {
         let mut handlers = self.handler_map_mutex.lock();
-        self.watcher.watch(Path::new(path))
+        self.watcher.watch(Path::new(path), RecursiveMode::Recursive)
             .map_err(|e| match e {
                 notify::Error::Io(e) => Error::Io(e),
                 _ => Error::Notify(e)
@@ -152,14 +114,25 @@ impl Hotwatch {
             })
     }
 
-    fn run(handler_map_mutex: HandlerMapMutex, rx: Receiver<notify::Event>) {
+    fn run(handler_map_mutex: HandlerMapMutex, rx: Receiver<Event>) {
         std::thread::spawn(move || {
             loop {
                 match rx.recv() {
-                    Ok(notify_event) => {
-                        if let Some(event) = event_from_notify(notify_event) {
-                            let handlers = handler_map_mutex.lock();
-                            if let Some(handler) = (*handlers).get(&event.path) {
+                    Ok(event) => {
+                        if cfg!(debug_assertions) {
+                            println!("Hotwatch {:?}", event);
+                        }
+                        let handlers = handler_map_mutex.lock();
+                        if let Some(mut path) = path_from_event(&event) {
+                            let mut handler = None;
+                            let mut poppable = true;
+                            while handler.is_none() && poppable {
+                                if let Some(str_path) = path.to_str() {
+                                    handler = (*handlers).get(str_path);
+                                }
+                                poppable = path.pop();
+                            }
+                            if let Some(handler) = handler {
                                 handler(event);
                             }
                         }
