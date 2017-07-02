@@ -5,7 +5,7 @@
 
 [Documentation](https://francesca64.github.io/hotwatch/docs/hotwatch)
 
-*hotwatch* is a Rust library for conveniently watching and handling file changes.
+*hotwatch* is a Rust library for comfortably watching and handling file changes. It's a thin convenience wrapper over [notify](https://github.com/passcod/notify), allowing you to easily spawn handlers.
 
 Nightly Rust is required, since I used the box keyword a few times. Sorry.
 

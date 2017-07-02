@@ -1,4 +1,5 @@
-//! hotwatch is a Rust library for conveniently watching and handling file changes.
+//! hotwatch is a Rust library for comfortably watching and handling file changes. 
+//! It's a thin convenience wrapper over [notify](https://github.com/passcod/notify), allowing you to easily spawn handlers.
 //!
 //! Watching is done on a separate thread to avoid blocking your enjoyment of life.
 //! All handlers are run on that thread as well, so keep that in mind when attempting to access
@@ -80,6 +81,13 @@ impl Hotwatch {
     }
 
     /// Watch a path and register a handler to it.
+    ///
+    /// When watching a directory, that handler will receive all events for all directory
+    /// contents, even recursiving through subdirectories.
+    ///
+    /// Only the most specific applicable handler will be called. In other words, if you're
+    /// watching "dir" and "dir/file1", then only the latter handler will fire for changes to
+    /// file1.
     ///
     /// Note that handlers will be run in hotwatch's watch thread, so you'll have to use `move`
     /// if the closure captures anything.
