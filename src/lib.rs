@@ -1,4 +1,4 @@
-//! hotwatch is a Rust library for comfortably watching and handling file changes. 
+//! hotwatch is a Rust library for comfortably watching and handling file changes.
 //! It's a thin convenience wrapper over [notify](https://github.com/passcod/notify), allowing you to easily spawn handlers.
 //!
 //! Watching is done on a separate thread to avoid blocking your enjoyment of life.
@@ -9,11 +9,13 @@
 
 #![feature(box_syntax)]
 
+#[macro_use] extern crate derive_more;
 extern crate notify;
 extern crate parking_lot;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::fs::canonicalize;
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
@@ -36,7 +38,7 @@ fn path_from_event(e: &Event) -> Option<PathBuf> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum Error {
     Io(std::io::Error),
     Notify(notify::Error)
@@ -45,7 +47,7 @@ pub enum Error {
 type HotwatchResult<T> = Result<T, Error>;
 
 type Handler = Box<Fn(Event) + Send>;
-type HandlerMapMutex = Arc<Mutex<HashMap<String, Handler>>>;
+type HandlerMapMutex = Arc<Mutex<HashMap<PathBuf, Handler>>>;
 
 pub struct Hotwatch {
     watcher: RecommendedWatcher,
@@ -109,16 +111,20 @@ impl Hotwatch {
     ///     }
     /// }).expect("Failed to watch file!");
     /// ```
-    pub fn watch<F>(&mut self, path: &str, handler: F) -> HotwatchResult<()>
-    where F: 'static + Fn(Event) + Send {
+    pub fn watch<P, F>(&mut self, path: P, handler: F) -> HotwatchResult<()>
+    where P: AsRef<Path>, F: 'static + Fn(Event) + Send {
+        let absolute_path = canonicalize(path)?;
         let mut handlers = self.handler_map_mutex.lock();
-        self.watcher.watch(Path::new(path), RecursiveMode::Recursive)
+        self.watcher.watch(Path::new(&absolute_path), RecursiveMode::Recursive)
             .map_err(|e| match e {
                 notify::Error::Io(e) => Error::Io(e),
                 _ => Error::Notify(e)
             })
             .map(|_| {
-                (*handlers).insert(path.to_string(), box handler);
+                (*handlers).insert(PathBuf::from(absolute_path), box handler);
+                if cfg!(debug_assertions) {
+                    println!("HotwatchHandlers {:?}", handlers.keys());
+                }
             })
     }
 
@@ -128,16 +134,20 @@ impl Hotwatch {
                 match rx.recv() {
                     Ok(event) => {
                         if cfg!(debug_assertions) {
-                            println!("Hotwatch {:?}", event);
+                            println!("HotwatchEvent {:?}", event);
                         }
                         let handlers = handler_map_mutex.lock();
                         if let Some(mut path) = path_from_event(&event) {
                             let mut handler = None;
                             let mut poppable = true;
+                            if cfg!(debug_assertions) {
+                                println!("HotwatchMatch");
+                            }
                             while handler.is_none() && poppable {
-                                if let Some(str_path) = path.to_str() {
-                                    handler = (*handlers).get(str_path);
+                                if cfg!(debug_assertions) {
+                                    println!(" -> {:?}", path);
                                 }
+                                handler = (*handlers).get(&path);
                                 poppable = path.pop();
                             }
                             if let Some(handler) = handler {
