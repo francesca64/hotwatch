@@ -7,8 +7,8 @@ set -o errexit -o nounset
 rev=$(git rev-parse --short HEAD)
 
 git init
-git config user.name "Travis CI"
-git config user.email "builder@travis"
+git config user.name "ComfyBot"
+git config user.email "bot@comfysoft.net"
 
 git remote add upstream "https://$GH_TOKEN@github.com/francesca64/hotwatch.git"
 git fetch upstream
