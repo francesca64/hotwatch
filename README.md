@@ -5,7 +5,7 @@
 
 [Documentation](https://francesca64.github.io/hotwatch/docs/hotwatch)
 
-`hotwatch` is a Rust library for comfortably watching and handling file changes. It's a thin convenience wrapper over [notify](https://github.com/passcod/notify), allowing you to easily spawn handlers.
+`hotwatch` is a Rust library for comfortably watching and handling file changes. It's a thin convenience wrapper over [`notify`](https://github.com/passcod/notify), allowing you to easily spawn handlers.
 
 At least Rust 1.24 is required, due to the requirements of [`parking_lot`](https://github.com/Amanieu/parking_lot).
 
