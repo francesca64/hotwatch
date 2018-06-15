@@ -1,5 +1,5 @@
 //! `hotwatch` is a Rust library for comfortably watching and handling file changes.
-//! It's a thin convenience wrapper over [notify](https://github.com/passcod/notify),
+//! It's a thin convenience wrapper over [`notify`](https://github.com/passcod/notify),
 //! allowing you to easily spawn handlers.
 //!
 //! Watching is done on a separate thread to avoid blocking your enjoyment of life.
