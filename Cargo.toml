@@ -8,9 +8,10 @@ homepage = "https://francesca64.github.io/hotwatch/"
 repository = "https://github.com/francesca64/hotwatch"
 readme = "README.md"
 keywords = ["notify", "watch", "events", "filesystem"]
-license = "MIT"
+license = "Apache-2.0/MIT"
 
 [dependencies]
-derive_more = "0.7"
+derive_more = "0.11"
+log = "0.4"
 notify = "4.0"
-parking_lot = "0.5"
+parking_lot = "0.6"
