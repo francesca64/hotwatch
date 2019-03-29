@@ -14,6 +14,7 @@ extern crate notify;
 extern crate parking_lot;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::canonicalize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -42,6 +43,24 @@ fn path_from_event(e: &Event) -> Option<PathBuf> {
 pub enum Error {
     Io(std::io::Error),
     Notify(notify::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Error::Io(error) => error.fmt(f),
+            Error::Notify(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Io(error) => error.source(),
+            Error::Notify(error) => error.source(),
+        }
+    }
 }
 
 type HotwatchResult<T> = Result<T, Error>;
