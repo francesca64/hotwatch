@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.4.1 (2019-05-31)
+
+- Corrected doc links.
+
 # Version 0.4.0 (2019-05-30)
 
 This release removes the claim of compatability with Rust 1.24, as a patch update to `notify` changes the minimum requirement to 1.26.

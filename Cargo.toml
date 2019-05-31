@@ -1,10 +1,10 @@
 [package]
 name = "hotwatch"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Francesca Plebani <franplebani@gmail.com>"]
 description = "A Rust library for conveniently watching and handling file changes."
-documentation = "https://francesca64.github.io/hotwatch/docs/hotwatch"
-homepage = "https://francesca64.github.io/hotwatch/"
+documentation = "https://docs.rs/hotwatch"
+homepage = "https://github.com/francesca64/hotwatch"
 repository = "https://github.com/francesca64/hotwatch"
 readme = "README.md"
 keywords = ["notify", "watch", "events", "filesystem"]

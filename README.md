@@ -1,9 +1,8 @@
 # hotwatch
 
-[![Cargo Version](http://meritbadge.herokuapp.com/hotwatch)](https://crates.io/crates/hotwatch)
+[![Crates.io](https://img.shields.io/crates/v/hotwatch.svg)](https://crates.io/crates/hotwatch)
+[![Docs.rs](https://docs.rs/hotwatch/badge.svg)](https://docs.rs/hotwatch)
 [![Build Status](https://travis-ci.org/francesca64/hotwatch.svg?branch=master)](https://travis-ci.org/francesca64/hotwatch)
-
-[Documentation](https://francesca64.github.io/hotwatch/docs/hotwatch)
 
 `hotwatch` is a Rust library for comfortably watching and handling file changes. It's a thin convenience wrapper over [`notify`](https://github.com/passcod/notify), allowing you to easily spawn handlers.
 
