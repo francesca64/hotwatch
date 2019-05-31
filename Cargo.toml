@@ -1,7 +1,7 @@
 [package]
 name = "hotwatch"
-version = "0.3.1"
-authors = ["Francesca Frangipane <francesca@comfysoft.net>"]
+version = "0.4.0"
+authors = ["Francesca Plebani <franplebani@gmail.com>"]
 description = "A Rust library for conveniently watching and handling file changes."
 documentation = "https://francesca64.github.io/hotwatch/docs/hotwatch"
 homepage = "https://francesca64.github.io/hotwatch/"
@@ -11,7 +11,7 @@ keywords = ["notify", "watch", "events", "filesystem"]
 license = "Apache-2.0/MIT"
 
 [dependencies]
-derive_more = "0.11"
+derive_more = "0.14"
 log = "0.4"
 notify = "4.0"
-parking_lot = "0.6"
+parking_lot = "0.7"

@@ -6,10 +6,13 @@
 //! All handlers are run on that thread as well, so keep that in mind when attempting to access
 //! outside data from within a handler.
 //!
-//! At least Rust 1.24 is required, due to the requirements of [`parking_lot`](https://github.com/Amanieu/parking_lot).
+//! Only the latest stable version of Rust is supported.
+//! `hotwatch` may still work with older versions, but I make no guarantees.
 
-#[macro_use] extern crate derive_more;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate derive_more;
+#[macro_use]
+extern crate log;
 extern crate notify;
 extern crate parking_lot;
 
@@ -17,12 +20,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs::canonicalize;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver};
+use std::sync::Arc;
 use std::time::Duration;
 
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
-use notify::{RecommendedWatcher, Watcher, RecursiveMode};
 
 pub use notify::DebouncedEvent as Event;
 
@@ -95,7 +98,10 @@ impl Hotwatch {
         Hotwatch::run(handler_map_mutex.clone(), rx);
         Watcher::new(tx, Duration::from_secs(2))
             .map_err(Error::Notify)
-            .map(|watcher| Hotwatch { watcher, handler_map_mutex })
+            .map(|watcher| Hotwatch {
+                watcher,
+                handler_map_mutex,
+            })
     }
 
     /// Watch a path and register a handler to it.
@@ -128,11 +134,14 @@ impl Hotwatch {
     /// }).expect("Failed to watch file!");
     /// ```
     pub fn watch<P, F>(&mut self, path: P, handler: F) -> HotwatchResult<()>
-        where P: AsRef<Path>, F: 'static + Fn(Event) + Send
+    where
+        P: AsRef<Path>,
+        F: 'static + Fn(Event) + Send,
     {
         let absolute_path = canonicalize(path)?;
         let mut handlers = self.handler_map_mutex.lock();
-        self.watcher.watch(Path::new(&absolute_path), RecursiveMode::Recursive)
+        self.watcher
+            .watch(Path::new(&absolute_path), RecursiveMode::Recursive)
             .map_err(|err| match err {
                 notify::Error::Io(err) => Error::Io(err),
                 _ => Error::Notify(err),
@@ -144,28 +153,26 @@ impl Hotwatch {
     }
 
     fn run(handler_map_mutex: HandlerMapMutex, rx: Receiver<Event>) {
-        std::thread::spawn(move || {
-            loop {
-                match rx.recv() {
-                    Ok(event) => {
-                        debug!("HotwatchEvent {:?}", event);
-                        let handlers = handler_map_mutex.lock();
-                        if let Some(mut path) = path_from_event(&event) {
-                            let mut handler = None;
-                            let mut poppable = true;
-                            while handler.is_none() && poppable {
-                                debug!("HotwatchMatch {:?}", path);
-                                handler = (*handlers).get(&path);
-                                poppable = path.pop();
-                            }
-                            if let Some(handler) = handler {
-                                handler(event);
-                            }
+        std::thread::spawn(move || loop {
+            match rx.recv() {
+                Ok(event) => {
+                    debug!("HotwatchEvent {:?}", event);
+                    let handlers = handler_map_mutex.lock();
+                    if let Some(mut path) = path_from_event(&event) {
+                        let mut handler = None;
+                        let mut poppable = true;
+                        while handler.is_none() && poppable {
+                            debug!("HotwatchMatch {:?}", path);
+                            handler = (*handlers).get(&path);
+                            poppable = path.pop();
                         }
-                    },
-                    Err(e) => {
-                        error!("Receiver error: {:?}", e);
+                        if let Some(handler) = handler {
+                            handler(event);
+                        }
                     }
+                }
+                Err(e) => {
+                    error!("Receiver error: {:?}", e);
                 }
             }
         });

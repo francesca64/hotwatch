@@ -1,5 +1,14 @@
 # Unreleased
 
+# Version 0.4.0 (2019-05-30)
+
+This release removes the claim of compatability with Rust 1.24, as a patch update to `notify` changes the minimum requirement to 1.26.
+
+`hotwatch` 0.3 can still be used with Rust 1.24 if you pin the `notify` dependency to `4.0.6`.
+
+- Only the latest stable release of Rust is guaranteed to be compatible.
+- `hotwatch::Error` now implements `std::error::Error`.
+
 # Version 0.3.1 (2018-06-15)
 
 This release makes `hotwatch` seem significantly more like a legitimate crate.
