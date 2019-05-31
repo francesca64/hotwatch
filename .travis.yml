@@ -1,18 +1,27 @@
 language: rust
-sudo: false
-rust:
-- nightly
-- beta
-- stable
-before_script:
-- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+
+cache: cargo
+
+matrix:
+  include:
+    - env: TARGET=x86_64-unknown-linux-gnu
+      os: linux
+      rust: nightly
+    - env: TARGET=x86_64-unknown-linux-gnu
+      os: linux
+      rust: beta
+    - env: TARGET=x86_64-unknown-linux-gnu
+      os: linux
+      rust: stable
+
+install:
+  - rustup self update
+  - rustup target add $TARGET; true
+
 script:
-- |
-  travis-cargo build &&
-  travis-cargo test &&
-  travis-cargo bench &&
-  travis-cargo doc
+  - cargo build --all --target $TARGET --verbose
+  - cargo test --all --target $TARGET --verbose
+
 after_success:
-- test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && bash deploy-docs.sh
-env:
-- TRAVIS_CARGO_NIGHTLY_FEATURE=""
+  - test "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false"
+    && cargo publish --token ${CRATESIO_TOKEN}
