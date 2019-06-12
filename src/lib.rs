@@ -155,10 +155,10 @@ impl Hotwatch {
         F: 'static + Fn(Event) + Send,
     {
         let absolute_path = path.as_ref().canonicalize()?;
-        let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
         self.watcher
             .watch(&absolute_path, notify::RecursiveMode::Recursive)?;
-        (*handlers).insert(absolute_path, Box::new(handler));
+        let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
+        handlers.insert(absolute_path, Box::new(handler));
         log::debug!("active handlers: {:#?}", handlers.keys());
         Ok(())
     }
@@ -174,7 +174,7 @@ impl Hotwatch {
                         let mut poppable = true;
                         while handler.is_none() && poppable {
                             log::debug!("matching against {:?}", path);
-                            handler = (*handlers).get(&path);
+                            handler = handlers.get(&path);
                             poppable = path.pop();
                         }
                         if let Some(handler) = handler {
