@@ -115,7 +115,7 @@ impl Hotwatch {
     pub fn new_with_custom_delay(delay: std::time::Duration) -> Result<Self, Error> {
         let (tx, rx) = channel();
         let handlers = Arc::<Mutex<_>>::default();
-        Hotwatch::run(handlers.clone(), rx);
+        Hotwatch::run(Arc::clone(&handlers), rx);
         notify::Watcher::new(tx, delay)
             .map_err(Error::Notify)
             .map(|watcher| Hotwatch { watcher, handlers })
@@ -157,8 +157,8 @@ impl Hotwatch {
         let absolute_path = path.as_ref().canonicalize()?;
         let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
         self.watcher
-            .watch(Path::new(&absolute_path), notify::RecursiveMode::Recursive)?;
-        (*handlers).insert(PathBuf::from(absolute_path), Box::new(handler));
+            .watch(&absolute_path, notify::RecursiveMode::Recursive)?;
+        (*handlers).insert(absolute_path, Box::new(handler));
         log::debug!("active handlers: {:#?}", handlers.keys());
         Ok(())
     }

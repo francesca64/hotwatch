@@ -6,6 +6,7 @@
 - Implemented `Debug` for `Hotwatch`.
 - Added `Hotwatch::new_with_custom_delay`.
 - Removed dependency on `derive_more` and `parking_lot`.
+- Updated docs and added an example.
 
 # Version 0.4.1 (2019-05-31)
 

@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Francesca",
+        "hobby": "drawing",
+        "favorite_color": "red"
+    },
+    {
+        "name": "Elizabeth",
+        "hobby": "cooking",
+        "favorite_color": "black"
+    }
+]
