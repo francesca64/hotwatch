@@ -1,13 +1,12 @@
 //! `hotwatch` is a Rust library for comfortably watching and handling file changes.
 //! It's a thin convenience wrapper over [`notify`](https://github.com/passcod/notify),
-//! allowing you to easily spawn handlers.
+//! allowing you to easily set callbacks for each path you want to watch.
 //!
-//! Watching is done on a separate thread to avoid blocking your enjoyment of life.
+//! Watching is done on a separate thread so you don't have to worry about blocking.
 //! All handlers are run on that thread as well, so keep that in mind when attempting to access
 //! outside data from within a handler.
 //!
 //! Only the latest stable version of Rust is supported.
-//! `hotwatch` may still work with older versions, but I make no guarantees.
 
 use std::{
     collections::HashMap,
@@ -18,8 +17,8 @@ use std::{
     },
 };
 
-pub use notify::DebouncedEvent as Event;
 use notify::Watcher as _;
+pub use notify::{self, DebouncedEvent as Event};
 
 fn path_from_event(e: &Event) -> Option<PathBuf> {
     match e {
@@ -93,22 +92,31 @@ impl Hotwatch {
     ///
     /// # Errors
     ///
-    /// This function can fail if the underlying [notify](https://docs.rs/notify/4.0/notify/)
-    /// instance fails to initialize. This will unfortunately expose you to notify's own error
-    /// type; hotwatch doesn't perfectly encapsulate this.
+    /// This will fail if the underlying [notify](https://docs.rs/notify/4.0/notify/)
+    /// instance fails to initialize.
     ///
     /// # Examples
     ///
     /// ```
     /// use hotwatch::Hotwatch;
     ///
-    /// let hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
+    /// let hotwatch = Hotwatch::new().expect("hotwatch failed to initialize");
     /// ```
     pub fn new() -> Result<Self, Error> {
+        Self::new_with_custom_delay(std::time::Duration::from_secs(2))
+    }
+
+    /// Using [`Hotwatch::new`] will give you a default delay of 2 seconds.
+    /// This method allows you to specify your own value.
+    ///
+    /// # Notes
+    ///
+    /// A delay of over 30 seconds will prevent repetitions of previous events on macOS.
+    pub fn new_with_custom_delay(delay: std::time::Duration) -> Result<Self, Error> {
         let (tx, rx) = channel();
-        let handlers: Arc<Mutex<HandlerMap>> = Default::default();
+        let handlers = Arc::<Mutex<_>>::default();
         Hotwatch::run(handlers.clone(), rx);
-        notify::Watcher::new(tx, std::time::Duration::from_secs(2))
+        notify::Watcher::new(tx, delay)
             .map_err(Error::Notify)
             .map(|watcher| Hotwatch { watcher, handlers })
     }
@@ -127,20 +135,19 @@ impl Hotwatch {
     ///
     /// # Errors
     ///
-    /// Watching will fail if the path can't be read, thus returning
-    /// a `hotwatch::Error::Io(std::io::Error)`.
+    /// Watching will fail if the path can't be read, returning [`Error::Io`].
     ///
     /// # Examples
     ///
     /// ```
     /// use hotwatch::{Hotwatch, Event};
     ///
-    /// let mut hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
+    /// let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
     /// hotwatch.watch("README.md", |event: Event| {
     ///     if let Event::Write(path) = event {
     ///         println!("{:?} changed!", path);
     ///     }
-    /// }).expect("Failed to watch file!");
+    /// }).expect("failed to watch file!");
     /// ```
     pub fn watch<P, F>(&mut self, path: P, handler: F) -> Result<(), Error>
     where

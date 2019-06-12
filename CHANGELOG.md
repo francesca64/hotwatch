@@ -1,5 +1,12 @@
 # Unreleased
 
+# Version 0.4.2 (2019-06-12)
+
+- Re-export `notify`.
+- Implemented `Debug` for `Hotwatch`.
+- Added `Hotwatch::new_with_custom_delay`.
+- Removed dependency on `derive_more` and `parking_lot`.
+
 # Version 0.4.1 (2019-05-31)
 
 - Corrected doc links.
