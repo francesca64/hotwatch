@@ -182,7 +182,10 @@ impl Hotwatch {
                         }
                     }
                 }
-                Err(_) => log::error!("sender disconnected! the watcher is dead 💀"),
+                Err(_) => {
+                    log::debug!("sender disconnected! the watcher is dead 💀");
+                    break;
+                }
             }
         });
     }
