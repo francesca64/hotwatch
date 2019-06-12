@@ -2,6 +2,7 @@
 name = "hotwatch"
 version = "0.4.1"
 authors = ["Francesca Plebani <franplebani@gmail.com>"]
+edition = "2018"
 description = "A Rust library for conveniently watching and handling file changes."
 documentation = "https://docs.rs/hotwatch"
 homepage = "https://github.com/francesca64/hotwatch"
@@ -11,7 +12,5 @@ keywords = ["notify", "watch", "events", "filesystem"]
 license = "Apache-2.0/MIT"
 
 [dependencies]
-derive_more = "0.14"
 log = "0.4"
 notify = "4.0"
-parking_lot = "0.7"

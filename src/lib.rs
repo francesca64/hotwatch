@@ -9,50 +9,42 @@
 //! Only the latest stable version of Rust is supported.
 //! `hotwatch` may still work with older versions, but I make no guarantees.
 
-#[macro_use]
-extern crate derive_more;
-#[macro_use]
-extern crate log;
-extern crate notify;
-extern crate parking_lot;
-
-use std::collections::HashMap;
-use std::fmt;
-use std::fs::canonicalize;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver};
-use std::sync::Arc;
-use std::time::Duration;
-
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use parking_lot::Mutex;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{
+        mpsc::{channel, Receiver},
+        Arc, Mutex,
+    },
+};
 
 pub use notify::DebouncedEvent as Event;
+use notify::Watcher as _;
 
 fn path_from_event(e: &Event) -> Option<PathBuf> {
     match e {
-        &Event::NoticeWrite(ref p)
-        | &Event::NoticeRemove(ref p)
-        | &Event::Create(ref p)
-        | &Event::Write(ref p)
-        | &Event::Chmod(ref p)
-        | &Event::Remove(ref p)
-        | &Event::Rename(ref p, _) => Some(p.clone()),
-        &_ => None,
+        Event::NoticeWrite(p)
+        | Event::NoticeRemove(p)
+        | Event::Create(p)
+        | Event::Write(p)
+        | Event::Chmod(p)
+        | Event::Remove(p)
+        | Event::Rename(p, _) => Some(p.clone()),
+        _ => None,
     }
 }
 
-#[derive(Debug, From)]
+#[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),
     Notify(notify::Error),
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Error {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Error::Io(error) => error.fmt(f),
-            Error::Notify(error) => error.fmt(f),
+            Error::Io(error) => error.fmt(fmt),
+            Error::Notify(error) => error.fmt(fmt),
         }
     }
 }
@@ -66,14 +58,34 @@ impl std::error::Error for Error {
     }
 }
 
-type HotwatchResult<T> = Result<T, Error>;
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Io(err)
+    }
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Self {
+        if let notify::Error::Io(err) = err {
+            err.into()
+        } else {
+            Error::Notify(err)
+        }
+    }
+}
 
 type Handler = Box<Fn(Event) + Send>;
-type HandlerMapMutex = Arc<Mutex<HashMap<PathBuf, Handler>>>;
+type HandlerMap = HashMap<PathBuf, Handler>;
 
 pub struct Hotwatch {
-    watcher: RecommendedWatcher,
-    handler_map_mutex: HandlerMapMutex,
+    watcher: notify::RecommendedWatcher,
+    handlers: Arc<Mutex<HandlerMap>>,
+}
+
+impl std::fmt::Debug for Hotwatch {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.debug_struct("Hotwatch").finish()
+    }
 }
 
 impl Hotwatch {
@@ -81,7 +93,7 @@ impl Hotwatch {
     ///
     /// # Errors
     ///
-    /// This function can fail if the underlying [notify](https://docs.rs/notify/4.0.3/notify/)
+    /// This function can fail if the underlying [notify](https://docs.rs/notify/4.0/notify/)
     /// instance fails to initialize. This will unfortunately expose you to notify's own error
     /// type; hotwatch doesn't perfectly encapsulate this.
     ///
@@ -92,16 +104,13 @@ impl Hotwatch {
     ///
     /// let hotwatch = Hotwatch::new().expect("Hotwatch failed to initialize.");
     /// ```
-    pub fn new() -> HotwatchResult<Self> {
+    pub fn new() -> Result<Self, Error> {
         let (tx, rx) = channel();
-        let handler_map_mutex: Arc<Mutex<HashMap<_, _>>> = Default::default();
-        Hotwatch::run(handler_map_mutex.clone(), rx);
-        Watcher::new(tx, Duration::from_secs(2))
+        let handlers: Arc<Mutex<HandlerMap>> = Default::default();
+        Hotwatch::run(handlers.clone(), rx);
+        notify::Watcher::new(tx, std::time::Duration::from_secs(2))
             .map_err(Error::Notify)
-            .map(|watcher| Hotwatch {
-                watcher,
-                handler_map_mutex,
-            })
+            .map(|watcher| Hotwatch { watcher, handlers })
     }
 
     /// Watch a path and register a handler to it.
@@ -133,36 +142,31 @@ impl Hotwatch {
     ///     }
     /// }).expect("Failed to watch file!");
     /// ```
-    pub fn watch<P, F>(&mut self, path: P, handler: F) -> HotwatchResult<()>
+    pub fn watch<P, F>(&mut self, path: P, handler: F) -> Result<(), Error>
     where
         P: AsRef<Path>,
         F: 'static + Fn(Event) + Send,
     {
-        let absolute_path = canonicalize(path)?;
-        let mut handlers = self.handler_map_mutex.lock();
+        let absolute_path = path.as_ref().canonicalize()?;
+        let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
         self.watcher
-            .watch(Path::new(&absolute_path), RecursiveMode::Recursive)
-            .map_err(|err| match err {
-                notify::Error::Io(err) => Error::Io(err),
-                _ => Error::Notify(err),
-            })
-            .map(|_| {
-                (*handlers).insert(PathBuf::from(absolute_path), Box::new(handler));
-                debug!("HotwatchHandlers {:?}", handlers.keys());
-            })
+            .watch(Path::new(&absolute_path), notify::RecursiveMode::Recursive)?;
+        (*handlers).insert(PathBuf::from(absolute_path), Box::new(handler));
+        log::debug!("active handlers: {:#?}", handlers.keys());
+        Ok(())
     }
 
-    fn run(handler_map_mutex: HandlerMapMutex, rx: Receiver<Event>) {
+    fn run(handlers: Arc<Mutex<HandlerMap>>, rx: Receiver<Event>) {
         std::thread::spawn(move || loop {
             match rx.recv() {
                 Ok(event) => {
-                    debug!("HotwatchEvent {:?}", event);
-                    let handlers = handler_map_mutex.lock();
+                    log::debug!("received event 🎉: {:#?}", event);
+                    let handlers = handlers.lock().expect("handler mutex poisoned!");
                     if let Some(mut path) = path_from_event(&event) {
                         let mut handler = None;
                         let mut poppable = true;
                         while handler.is_none() && poppable {
-                            debug!("HotwatchMatch {:?}", path);
+                            log::debug!("matching against {:?}", path);
                             handler = (*handlers).get(&path);
                             poppable = path.pop();
                         }
@@ -171,9 +175,7 @@ impl Hotwatch {
                         }
                     }
                 }
-                Err(e) => {
-                    error!("Receiver error: {:?}", e);
-                }
+                Err(_) => log::error!("sender disconnected! the watcher is dead 💀"),
             }
         });
     }
