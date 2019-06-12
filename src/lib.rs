@@ -159,7 +159,20 @@ impl Hotwatch {
             .watch(&absolute_path, notify::RecursiveMode::Recursive)?;
         let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
         handlers.insert(absolute_path, Box::new(handler));
-        log::debug!("active handlers: {:#?}", handlers.keys());
+        Ok(())
+    }
+
+    /// Stop watching a path.
+    ///
+    /// # Errors
+    ///
+    /// This will fail if the path wasn't being watched, or if the path
+    /// couldn't be unwatched for some platform-specific internal reason.
+    pub fn unwatch<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        let absolute_path = path.as_ref().canonicalize()?;
+        self.watcher.unwatch(&absolute_path)?;
+        let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
+        handlers.remove(&absolute_path);
         Ok(())
     }
 

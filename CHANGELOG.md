@@ -5,6 +5,7 @@
 - Re-export `notify`.
 - Implemented `Debug` for `Hotwatch`.
 - Added `Hotwatch::new_with_custom_delay`.
+- Added `Hotwatch::unwatch`.
 - The background thread will now stop once `Hotwatch` is dropped.
 - Updated docs and added an example.
 - Removed dependency on `derive_more` and `parking_lot`.
