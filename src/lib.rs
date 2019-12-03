@@ -73,7 +73,7 @@ impl From<notify::Error> for Error {
     }
 }
 
-type Handler = Box<Fn(Event) + Send>;
+type Handler = Box<dyn Fn(Event) + Send>;
 type HandlerMap = HashMap<PathBuf, Handler>;
 
 pub struct Hotwatch {
