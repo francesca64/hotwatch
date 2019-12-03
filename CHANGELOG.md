@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.4.3 (2019-12-03)
+
+- Added `blocking` API.
+
 # Version 0.4.2 (2019-06-12)
 
 - Re-export `notify`.

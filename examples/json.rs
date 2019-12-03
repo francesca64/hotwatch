@@ -22,9 +22,10 @@ fn main() -> Result<(), failure::Error> {
     let changed = AtomicBool::new(true).into();
     {
         let changed = Arc::clone(&changed);
-        watcher.watch(&path, move |event| match event {
-            Event::Write(_) => changed.store(true, Ordering::Release),
-            _ => (),
+        watcher.watch(&path, move |event| {
+            if let Event::Write(_path) = event {
+                changed.store(true, Ordering::Release);
+            }
         })?;
     }
     loop {

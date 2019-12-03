@@ -1,80 +1,39 @@
-//! `hotwatch` is a Rust library for comfortably watching and handling file changes.
-//! It's a thin convenience wrapper over [`notify`](https://github.com/passcod/notify),
-//! allowing you to easily set callbacks for each path you want to watch.
-//!
-//! Watching is done on a separate thread so you don't have to worry about blocking.
-//! All handlers are run on that thread as well, so keep that in mind when attempting to access
-//! outside data from within a handler.
-//!
-//! (There's also a [`blocking`] mode, in case you're a big fan of blocking.)
-//!
-//! Only the latest stable version of Rust is supported.
+//! Blocking file watching
 
-pub mod blocking;
-mod util;
-
+use crate::{util, Error, Event};
 use notify::Watcher as _;
-pub use notify::{self, DebouncedEvent as Event};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{
-        mpsc::{channel, Receiver},
-        Arc, Mutex,
-    },
+    sync::mpsc::{channel, Receiver},
 };
 
-#[derive(Debug)]
-pub enum Error {
-    Io(std::io::Error),
-    Notify(notify::Error),
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Flow {
+    /// Continue watching and blocking the thread.
+    Continue,
+    /// Stop watching, returning control of the thread.
+    Exit,
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Io(error) => error.fmt(fmt),
-            Self::Notify(error) => error.fmt(fmt),
-        }
+impl Default for Flow {
+    fn default() -> Self {
+        Self::Continue
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Io(error) => error.source(),
-            Self::Notify(error) => error.source(),
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
-}
-
-impl From<notify::Error> for Error {
-    fn from(err: notify::Error) -> Self {
-        if let notify::Error::Io(err) = err {
-            err.into()
-        } else {
-            Self::Notify(err)
-        }
-    }
-}
-
-type HandlerMap = HashMap<PathBuf, Box<dyn Fn(Event) + Send>>;
-
-/// A non-blocking hotwatch instance.
+/// A blocking hotwatch instance.
 ///
-/// Watching begins as soon as [`Self::watch`] is called, and occurs in a
-/// background thread. The background thread runs until this is dropped.
+/// No watching will actually happen until you call [`Hotwatch::run`], which blocks
+/// the thread until a handler returns [`Flow::Exit`]. This is useful if you just
+/// want to wait on some criteria, rather than if you're building some long-running
+/// sexy hot reload service.
 ///
-/// Dropping this will also unwatch everything.
+/// Dropping this will unwatch everything.
 pub struct Hotwatch {
     watcher: notify::RecommendedWatcher,
-    handlers: Arc<Mutex<HandlerMap>>,
+    handlers: HashMap<PathBuf, Box<dyn Fn(Event) -> Flow>>,
+    rx: Receiver<Event>,
 }
 
 impl std::fmt::Debug for Hotwatch {
@@ -84,7 +43,7 @@ impl std::fmt::Debug for Hotwatch {
 }
 
 impl Hotwatch {
-    /// Creates a new non-blocking hotwatch instance.
+    /// Creates a new blocking hotwatch instance.
     ///
     /// # Errors
     ///
@@ -94,7 +53,7 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::Hotwatch;
+    /// use hotwatch::blocking::Hotwatch;
     ///
     /// let hotwatch = Hotwatch::new().expect("hotwatch failed to initialize");
     /// ```
@@ -110,13 +69,17 @@ impl Hotwatch {
     /// A delay of over 30 seconds will prevent repetitions of previous events on macOS.
     pub fn new_with_custom_delay(delay: std::time::Duration) -> Result<Self, Error> {
         let (tx, rx) = channel();
-        let handlers = Arc::<Mutex<_>>::default();
-        Self::run(Arc::clone(&handlers), rx);
         let watcher = notify::Watcher::new(tx, delay).map_err(Error::Notify)?;
-        Ok(Self { watcher, handlers })
+        Ok(Self {
+            watcher,
+            handlers: Default::default(),
+            rx,
+        })
     }
 
     /// Watch a path and register a handler to it.
+    ///
+    /// Handlers won't actually be run until you call [`Hotwatch::run`].
     ///
     /// When watching a directory, that handler will receive all events for all directory
     /// contents, even recursing through subdirectories.
@@ -125,9 +88,6 @@ impl Hotwatch {
     /// watching "dir" and "dir/file1", then only the latter handler will fire for changes to
     /// `file1`.
     ///
-    /// Note that handlers will be run in hotwatch's watch thread, so you'll have to use `move`
-    /// if the closure captures anything.
-    ///
     /// # Errors
     ///
     /// Watching will fail if the path can't be read, returning [`Error::Io`].
@@ -135,25 +95,28 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::{Hotwatch, Event};
+    /// use hotwatch::{blocking::{Flow, Hotwatch}, Event};
     ///
     /// let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
+    /// // Note that this won't actually do anything until you call `hotwatch.run()`!
     /// hotwatch.watch("README.md", |event: Event| {
     ///     if let Event::Write(path) = event {
     ///         println!("{:?} changed!", path);
+    ///         Flow::Exit
+    ///     } else {
+    ///         Flow::Continue
     ///     }
     /// }).expect("failed to watch file!");
     /// ```
     pub fn watch<P, F>(&mut self, path: P, handler: F) -> Result<(), Error>
     where
         P: AsRef<Path>,
-        F: 'static + Fn(Event) + Send,
+        F: 'static + Fn(Event) -> Flow,
     {
         let absolute_path = path.as_ref().canonicalize()?;
         self.watcher
             .watch(&absolute_path, notify::RecursiveMode::Recursive)?;
-        let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
-        handlers.insert(absolute_path, Box::new(handler));
+        self.handlers.insert(absolute_path, Box::new(handler));
         Ok(())
     }
 
@@ -166,19 +129,22 @@ impl Hotwatch {
     pub fn unwatch<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let absolute_path = path.as_ref().canonicalize()?;
         self.watcher.unwatch(&absolute_path)?;
-        let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
-        handlers.remove(&absolute_path);
+        self.handlers.remove(&absolute_path);
         Ok(())
     }
 
-    fn run(handlers: Arc<Mutex<HandlerMap>>, rx: Receiver<Event>) {
-        std::thread::spawn(move || loop {
-            match rx.recv() {
+    /// Run handlers in an endless loop, blocking the thread.
+    ///
+    /// The loop will only exit if a handler returns [`Flow::Exit`].
+    pub fn run(&mut self) {
+        loop {
+            match self.rx.recv() {
                 Ok(event) => {
                     util::log_event(&event);
-                    let handlers = handlers.lock().expect("handler mutex poisoned!");
-                    if let Some(handler) = util::handler_for_event(&event, &handlers) {
-                        handler(event);
+                    if let Some(handler) = util::handler_for_event(&event, &self.handlers) {
+                        if let Flow::Exit = handler(event) {
+                            break;
+                        }
                     }
                 }
                 Err(_) => {
@@ -186,6 +152,6 @@ impl Hotwatch {
                     break;
                 }
             }
-        });
+        }
     }
 }
