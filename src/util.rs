@@ -9,7 +9,10 @@ pub fn log_dead() {
     log::debug!("sender disconnected! the watcher is dead 💀");
 }
 
-pub fn handler_for_event<'a, H>(e: &Event, handlers: &'a HashMap<PathBuf, H>) -> Option<&'a H> {
+pub fn handler_for_event<'a, H>(
+    e: &Event,
+    handlers: &'a mut HashMap<PathBuf, H>,
+) -> Option<&'a mut H> {
     fn path_from_event(e: &Event) -> Option<PathBuf> {
         match e {
             Event::NoticeWrite(p)
@@ -23,16 +26,20 @@ pub fn handler_for_event<'a, H>(e: &Event, handlers: &'a HashMap<PathBuf, H>) ->
         }
     }
 
-    fn find_handler<'a, H>(mut path: PathBuf, handlers: &'a HashMap<PathBuf, H>) -> Option<&'a H> {
-        let mut handler = None;
+    fn find_handler<'a, H>(
+        mut path: PathBuf,
+        handlers: &'a mut HashMap<PathBuf, H>,
+    ) -> Option<&'a mut H> {
         let mut poppable = true;
-        while handler.is_none() && poppable {
+        while poppable {
             log::debug!("matching against {:?}", path);
-            handler = handlers.get(&path);
+            if handlers.contains_key(&path) {
+                return handlers.get_mut(&path);
+            }
             poppable = path.pop();
         }
-        handler
+        None
     }
 
-    path_from_event(e).and_then(|path| find_handler(path, handlers))
+    path_from_event(e).and_then(move |path| find_handler(path, handlers))
 }
