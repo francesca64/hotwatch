@@ -1,0 +1,19 @@
+name: Publish
+
+on:
+  push:
+    branches: [master]
+    paths: "Cargo.toml"
+
+jobs:
+  Publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: stable
+          components: rustfmt
+      - name: Publish to crates.io
+        continue-on-error: true
+        run: cargo publish --token ${{ secrets.cratesio_token }}
