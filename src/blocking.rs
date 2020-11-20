@@ -141,7 +141,7 @@ impl Hotwatch {
             match self.rx.recv() {
                 Ok(event) => {
                     util::log_event(&event);
-                    if let Some(handler) = util::handler_for_event(&event, &self.handlers) {
+                    if let Some(handler) = util::handler_for_event(&event, &mut self.handlers) {
                         if let Flow::Exit = handler(event) {
                             break;
                         }

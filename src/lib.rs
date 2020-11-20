@@ -64,7 +64,7 @@ impl From<notify::Error> for Error {
     }
 }
 
-type HandlerMap = HashMap<PathBuf, Box<dyn Fn(Event) + Send>>;
+type HandlerMap = HashMap<PathBuf, Box<dyn FnMut(Event) + Send>>;
 
 /// A non-blocking hotwatch instance.
 ///
@@ -147,7 +147,7 @@ impl Hotwatch {
     pub fn watch<P, F>(&mut self, path: P, handler: F) -> Result<(), Error>
     where
         P: AsRef<Path>,
-        F: 'static + Fn(Event) + Send,
+        F: 'static + FnMut(Event) + Send,
     {
         let absolute_path = path.as_ref().canonicalize()?;
         self.watcher
@@ -176,8 +176,8 @@ impl Hotwatch {
             match rx.recv() {
                 Ok(event) => {
                     util::log_event(&event);
-                    let handlers = handlers.lock().expect("handler mutex poisoned!");
-                    if let Some(handler) = util::handler_for_event(&event, &handlers) {
+                    let mut handlers = handlers.lock().expect("handler mutex poisoned!");
+                    if let Some(handler) = util::handler_for_event(&event, &mut handlers) {
                         handler(event);
                     }
                 }
