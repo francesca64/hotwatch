@@ -32,7 +32,7 @@ impl Default for Flow {
 /// Dropping this will unwatch everything.
 pub struct Hotwatch {
     watcher: notify::RecommendedWatcher,
-    handlers: HashMap<PathBuf, Box<dyn Fn(Event) -> Flow>>,
+    handlers: HashMap<PathBuf, Box<dyn FnMut(Event) -> Flow>>,
     rx: Receiver<Event>,
 }
 
@@ -111,7 +111,7 @@ impl Hotwatch {
     pub fn watch<P, F>(&mut self, path: P, handler: F) -> Result<(), Error>
     where
         P: AsRef<Path>,
-        F: 'static + Fn(Event) -> Flow,
+        F: 'static + FnMut(Event) -> Flow,
     {
         let absolute_path = path.as_ref().canonicalize()?;
         self.watcher
