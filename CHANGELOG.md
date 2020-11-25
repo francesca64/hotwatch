@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.4.5 (2020-11-25)
+
+- The blocking implementation of `watch` now also accepts `FnMut` instead of `Fn`.
+
 # Version 0.4.4 (2020-11-19)
 
 - `watch` now accepts `FnMut` instead of `Fn`
