@@ -1,5 +1,8 @@
 use crate::Event;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 pub fn log_event(e: &Event) {
     log::debug!("received event 🎉: {:#?}", e);
@@ -13,7 +16,7 @@ pub fn handler_for_event<'a, H>(
     e: &Event,
     handlers: &'a mut HashMap<PathBuf, H>,
 ) -> Option<&'a mut H> {
-    fn path_from_event(e: &Event) -> Option<PathBuf> {
+    fn path_from_event(e: &Event) -> Option<&Path> {
         match e {
             Event::NoticeWrite(p)
             | Event::NoticeRemove(p)
@@ -21,22 +24,22 @@ pub fn handler_for_event<'a, H>(
             | Event::Write(p)
             | Event::Chmod(p)
             | Event::Remove(p)
-            | Event::Rename(p, _) => Some(p.clone()),
+            | Event::Rename(p, _) => Some(p.as_path()),
             _ => None,
         }
     }
 
     fn find_handler<'a, H>(
-        mut path: PathBuf,
+        path: &Path,
         handlers: &'a mut HashMap<PathBuf, H>,
     ) -> Option<&'a mut H> {
-        let mut poppable = true;
-        while poppable {
+        let mut remaining_path = Some(path);
+        while let Some(path) = remaining_path {
             log::debug!("matching against {:?}", path);
-            if handlers.contains_key(&path) {
-                return handlers.get_mut(&path);
+            if handlers.contains_key(path) {
+                return handlers.get_mut(path);
             }
-            poppable = path.pop();
+            remaining_path = path.parent();
         }
         None
     }

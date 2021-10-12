@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.4.6 (2021-10-09)
+
+- Removed unnecessary allocation from util::handler_for_event
+
 # Version 0.4.5 (2020-11-25)
 
 - The blocking implementation of `watch` now also accepts `FnMut` instead of `Fn`.
