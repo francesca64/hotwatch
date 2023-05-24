@@ -1,7 +1,8 @@
 //! Blocking file watching
 
-use crate::{util, Error, Event};
+use crate::{util, Error, Event, RECURSIVE_MODE};
 use notify::Watcher as _;
+use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, FileIdMap};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -31,9 +32,9 @@ impl Default for Flow {
 ///
 /// Dropping this will unwatch everything.
 pub struct Hotwatch {
-    watcher: notify::RecommendedWatcher,
+    debouncer: Debouncer<notify::RecommendedWatcher, FileIdMap>,
     handlers: HashMap<PathBuf, Box<dyn FnMut(Event) -> Flow>>,
-    rx: Receiver<Event>,
+    rx: Receiver<DebounceEventResult>,
 }
 
 impl std::fmt::Debug for Hotwatch {
@@ -69,9 +70,9 @@ impl Hotwatch {
     /// A delay of over 30 seconds will prevent repetitions of previous events on macOS.
     pub fn new_with_custom_delay(delay: std::time::Duration) -> Result<Self, Error> {
         let (tx, rx) = channel();
-        let watcher = notify::Watcher::new(tx, delay).map_err(Error::Notify)?;
+        let debouncer = new_debouncer(delay, None, tx).map_err(Error::Notify)?;
         Ok(Self {
-            watcher,
+            debouncer,
             handlers: Default::default(),
             rx,
         })
@@ -95,13 +96,13 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::{blocking::{Flow, Hotwatch}, Event};
+    /// use hotwatch::{blocking::{Flow, Hotwatch}, Event, EventKind};
     ///
     /// let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
     /// // Note that this won't actually do anything until you call `hotwatch.run()`!
     /// hotwatch.watch("README.md", |event: Event| {
-    ///     if let Event::Write(path) = event {
-    ///         println!("{:?} changed!", path);
+    ///     if let EventKind::Modify(_) = event.kind {
+    ///         println!("{:?} changed!", event.paths[0]);
     ///         Flow::Exit
     ///     } else {
     ///         Flow::Continue
@@ -114,8 +115,12 @@ impl Hotwatch {
         F: 'static + FnMut(Event) -> Flow,
     {
         let absolute_path = path.as_ref().canonicalize()?;
-        self.watcher
-            .watch(&absolute_path, notify::RecursiveMode::Recursive)?;
+        self.debouncer
+            .watcher()
+            .watch(&absolute_path, RECURSIVE_MODE)?;
+        self.debouncer
+            .cache()
+            .add_root(&absolute_path, RECURSIVE_MODE);
         self.handlers.insert(absolute_path, Box::new(handler));
         Ok(())
     }
@@ -128,7 +133,8 @@ impl Hotwatch {
     /// couldn't be unwatched for some platform-specific internal reason.
     pub fn unwatch<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let absolute_path = path.as_ref().canonicalize()?;
-        self.watcher.unwatch(&absolute_path)?;
+        self.debouncer.watcher().unwatch(&absolute_path)?;
+        self.debouncer.cache().remove_root(&absolute_path);
         self.handlers.remove(&absolute_path);
         Ok(())
     }
@@ -137,16 +143,27 @@ impl Hotwatch {
     ///
     /// The loop will only exit if a handler returns [`Flow::Exit`].
     pub fn run(&mut self) {
-        loop {
+        'watch: loop {
             match self.rx.recv() {
-                Ok(event) => {
-                    util::log_event(&event);
-                    if let Some(handler) = util::handler_for_event(&event, &mut self.handlers) {
-                        if let Flow::Exit = handler(event) {
-                            break;
+                Ok(result) => match result {
+                    Ok(events) => {
+                        for event in events {
+                            util::log_event(&event);
+                            if let Some(handler) =
+                                util::handler_for_event(&event, &mut self.handlers)
+                            {
+                                if let Flow::Exit = handler(event) {
+                                    break 'watch;
+                                }
+                            }
                         }
                     }
-                }
+                    Err(errs) => {
+                        for err in errs {
+                            util::log_error(&err);
+                        }
+                    }
+                },
                 Err(_) => {
                     util::log_dead();
                     break;

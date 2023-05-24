@@ -14,7 +14,9 @@ pub mod blocking;
 mod util;
 
 use notify::Watcher as _;
-pub use notify::{self, DebouncedEvent as Event};
+pub use notify::{self, EventKind};
+pub use notify_debouncer_full::DebouncedEvent as Event;
+use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, FileIdMap};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -23,6 +25,8 @@ use std::{
         Arc, Mutex,
     },
 };
+
+const RECURSIVE_MODE: notify::RecursiveMode = notify::RecursiveMode::Recursive;
 
 #[derive(Debug)]
 pub enum Error {
@@ -56,7 +60,7 @@ impl From<std::io::Error> for Error {
 
 impl From<notify::Error> for Error {
     fn from(err: notify::Error) -> Self {
-        if let notify::Error::Io(err) = err {
+        if let notify::ErrorKind::Io(err) = err.kind {
             err.into()
         } else {
             Self::Notify(err)
@@ -73,7 +77,7 @@ type HandlerMap = HashMap<PathBuf, Box<dyn FnMut(Event) + Send>>;
 ///
 /// Dropping this will also unwatch everything.
 pub struct Hotwatch {
-    watcher: notify::RecommendedWatcher,
+    debouncer: Debouncer<notify::RecommendedWatcher, FileIdMap>,
     handlers: Arc<Mutex<HandlerMap>>,
 }
 
@@ -112,8 +116,11 @@ impl Hotwatch {
         let (tx, rx) = channel();
         let handlers = Arc::<Mutex<_>>::default();
         Self::run(Arc::clone(&handlers), rx);
-        let watcher = notify::Watcher::new(tx, delay).map_err(Error::Notify)?;
-        Ok(Self { watcher, handlers })
+        let debouncer = new_debouncer(delay, None, tx).map_err(Error::Notify)?;
+        Ok(Self {
+            debouncer,
+            handlers,
+        })
     }
 
     /// Watch a path and register a handler to it.
@@ -135,12 +142,12 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::{Hotwatch, Event};
+    /// use hotwatch::{Hotwatch, Event, EventKind};
     ///
     /// let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
     /// hotwatch.watch("README.md", |event: Event| {
-    ///     if let Event::Write(path) = event {
-    ///         println!("{:?} changed!", path);
+    ///     if let EventKind::Modify(_) = event.kind {
+    ///         println!("{:?} changed!", event.paths[0]);
     ///     }
     /// }).expect("failed to watch file!");
     /// ```
@@ -150,8 +157,12 @@ impl Hotwatch {
         F: 'static + FnMut(Event) + Send,
     {
         let absolute_path = path.as_ref().canonicalize()?;
-        self.watcher
-            .watch(&absolute_path, notify::RecursiveMode::Recursive)?;
+        self.debouncer
+            .watcher()
+            .watch(&absolute_path, RECURSIVE_MODE)?;
+        self.debouncer
+            .cache()
+            .add_root(&absolute_path, RECURSIVE_MODE);
         let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
         handlers.insert(absolute_path, Box::new(handler));
         Ok(())
@@ -165,22 +176,32 @@ impl Hotwatch {
     /// couldn't be unwatched for some platform-specific internal reason.
     pub fn unwatch<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let absolute_path = path.as_ref().canonicalize()?;
-        self.watcher.unwatch(&absolute_path)?;
+        self.debouncer.watcher().unwatch(&absolute_path)?;
+        self.debouncer.cache().remove_root(&absolute_path);
         let mut handlers = self.handlers.lock().expect("handler mutex poisoned!");
         handlers.remove(&absolute_path);
         Ok(())
     }
 
-    fn run(handlers: Arc<Mutex<HandlerMap>>, rx: Receiver<Event>) {
+    fn run(handlers: Arc<Mutex<HandlerMap>>, rx: Receiver<DebounceEventResult>) {
         std::thread::spawn(move || loop {
             match rx.recv() {
-                Ok(event) => {
-                    util::log_event(&event);
-                    let mut handlers = handlers.lock().expect("handler mutex poisoned!");
-                    if let Some(handler) = util::handler_for_event(&event, &mut handlers) {
-                        handler(event);
+                Ok(result) => match result {
+                    Ok(events) => {
+                        for event in events {
+                            util::log_event(&event);
+                            let mut handlers = handlers.lock().expect("handler mutex poisoned!");
+                            if let Some(handler) = util::handler_for_event(&event, &mut handlers) {
+                                handler(event);
+                            }
+                        }
                     }
-                }
+                    Err(errs) => {
+                        for err in errs {
+                            util::log_error(&err);
+                        }
+                    }
+                },
                 Err(_) => {
                     util::log_dead();
                     break;

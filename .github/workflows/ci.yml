@@ -7,7 +7,7 @@ on:
       - "**.toml"
       - ".github/workflows/ci.yml"
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - "**.rs"
       - "**.toml"

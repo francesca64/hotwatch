@@ -1,19 +1,20 @@
 [package]
 name = "hotwatch"
-version = "0.4.6"
-authors = ["Francesca Lovebloom <francesca@brainiumstudios.com>"]
-edition = "2018"
+version = "0.5.0"
+authors = ["Francesca Lovebloom <franlovebloom@gmail.com>"]
+edition = "2021"
 description = "A Rust library for conveniently watching and handling file changes."
 documentation = "https://docs.rs/hotwatch"
 homepage = "https://github.com/francesca64/hotwatch"
 repository = "https://github.com/francesca64/hotwatch"
 readme = "README.md"
 keywords = ["notify", "watch", "events", "filesystem"]
-license = "Apache-2.0/MIT"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 log = "0.4"
-notify = "4.0"
+notify = "6.0"
+notify-debouncer-full = "0.1"
 
 [dev-dependencies]
 failure = "0.1"

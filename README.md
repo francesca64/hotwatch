@@ -2,18 +2,18 @@
 
 [![Crates.io](https://img.shields.io/crates/v/hotwatch.svg)](https://crates.io/crates/hotwatch)
 [![Docs.rs](https://docs.rs/hotwatch/badge.svg)](https://docs.rs/hotwatch)
-[![Build Status](https://travis-ci.org/francesca64/hotwatch.svg?branch=master)](https://travis-ci.org/francesca64/hotwatch)
+[![CI Status](https://github.com/francesca64/hotwatch/workflows/CI/badge.svg)](https://github.com/francesca64/hotwatch/actions)
 
 `hotwatch` is a Rust library for comfortably watching and handling file changes. It's a thin convenience wrapper over [`notify`](https://github.com/passcod/notify), allowing you to easily set callbacks for each path you want to watch.
 
 Only the latest stable version of Rust is supported.
 
 ```rust
-use hotwatch::{Hotwatch, Event};
+use hotwatch::{Hotwatch, Event, EventKind};
 
 let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
 hotwatch.watch("war.png", |event: Event| {
-    if let Event::Write(path) = event {
+    if let EventKind::Modify(_) = event.kind {
         println!("War has changed.");
     }
 }).expect("failed to watch file!");
