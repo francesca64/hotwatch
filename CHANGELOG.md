@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.5.0 (2023-05-24)
+
+- **Breaking:** Upgraded from `notify` v4 to v6, which substantially restructures [the `Event` type](https://docs.rs/notify/6.0.0/notify/event/struct.Event.html). See [`notify`'s CHANGELOG](https://github.com/notify-rs/notify/blob/main/CHANGELOG.md) for more subtle behavior changes.
+
 # Version 0.4.6 (2021-10-09)
 
 - Removed unnecessary allocation from util::handler_for_event

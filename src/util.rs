@@ -4,8 +4,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub fn log_event(e: &Event) {
-    log::debug!("received event 🎉: {:#?}", e);
+pub fn log_event(event: &Event) {
+    log::debug!("received event 🎉: {event:#?}");
+}
+
+pub fn log_error(err: &notify::Error) {
+    log::error!("error in event stream: {err}");
 }
 
 pub fn log_dead() {
@@ -16,17 +20,8 @@ pub fn handler_for_event<'a, H>(
     e: &Event,
     handlers: &'a mut HashMap<PathBuf, H>,
 ) -> Option<&'a mut H> {
-    fn path_from_event(e: &Event) -> Option<&Path> {
-        match e {
-            Event::NoticeWrite(p)
-            | Event::NoticeRemove(p)
-            | Event::Create(p)
-            | Event::Write(p)
-            | Event::Chmod(p)
-            | Event::Remove(p)
-            | Event::Rename(p, _) => Some(p.as_path()),
-            _ => None,
-        }
+    fn path_from_event(e: &Event) -> Option<&PathBuf> {
+        e.paths.first()
     }
 
     fn find_handler<'a, H>(
