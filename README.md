@@ -9,11 +9,11 @@
 Only the latest stable version of Rust is supported.
 
 ```rust
-use hotwatch::{Hotwatch, Event, EventKind};
+use hotwatch::{notify::event::ModifyKind, EventKind, Hotwatch};
 
 let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
 hotwatch.watch("war.png", |event: Event| {
-    if let EventKind::Modify(_) = event.kind {
+    if let EventKind::Modify(ModifyKind::Data(_)) = event.kind {
         println!("War has changed.");
     }
 }).expect("failed to watch file!");

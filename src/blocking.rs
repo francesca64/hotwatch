@@ -96,12 +96,16 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::{blocking::{Flow, Hotwatch}, Event, EventKind};
+    /// use hotwatch::{
+    ///     blocking::{Flow, Hotwatch},
+    ///     notify::event::ModifyKind,
+    ///     Event, EventKind,
+    /// };
     ///
     /// let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
     /// // Note that this won't actually do anything until you call `hotwatch.run()`!
     /// hotwatch.watch("README.md", |event: Event| {
-    ///     if let EventKind::Modify(_) = event.kind {
+    ///     if let EventKind::Modify(ModifyKind::Data(_)) = event.kind {
     ///         println!("{:?} changed!", event.paths[0]);
     ///         Flow::Exit
     ///     } else {
