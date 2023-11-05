@@ -9,6 +9,9 @@
 //! (There's also a [`blocking`] mode, in case you're a big fan of blocking.)
 //!
 //! Only the latest stable version of Rust is supported.
+//!
+//! # Feature Flags
+//! - `logging`: if active then this crate does logging. Is activated by default.
 
 pub mod blocking;
 mod util;
