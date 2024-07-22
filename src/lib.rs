@@ -142,11 +142,11 @@ impl Hotwatch {
     /// # Examples
     ///
     /// ```
-    /// use hotwatch::{Hotwatch, Event, EventKind};
+    /// use hotwatch::{notify::event::ModifyKind, Hotwatch, Event, EventKind};
     ///
     /// let mut hotwatch = Hotwatch::new().expect("hotwatch failed to initialize!");
     /// hotwatch.watch("README.md", |event: Event| {
-    ///     if let EventKind::Modify(_) = event.kind {
+    ///     if let EventKind::Modify(ModifyKind::Data(_)) = event.kind {
     ///         println!("{:?} changed!", event.paths[0]);
     ///     }
     /// }).expect("failed to watch file!");

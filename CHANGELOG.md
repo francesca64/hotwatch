@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.5.1 (2023-07-25)
+
+- Corrected examples and documentation to avoid redundant modify events.
+
 # Version 0.5.0 (2023-05-24)
 
 - **Breaking:** Upgraded from `notify` v4 to v6, which substantially restructures [the `Event` type](https://docs.rs/notify/6.0.0/notify/event/struct.Event.html). See [`notify`'s CHANGELOG](https://github.com/notify-rs/notify/blob/main/CHANGELOG.md) for more subtle behavior changes.

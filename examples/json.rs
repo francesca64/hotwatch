@@ -1,4 +1,4 @@
-use hotwatch::{EventKind, Hotwatch};
+use hotwatch::{notify::event::ModifyKind, EventKind, Hotwatch};
 use std::{
     fs::File,
     io::BufReader,
@@ -25,7 +25,7 @@ fn main() -> Result<(), failure::Error> {
     {
         let changed = Arc::clone(&changed);
         watcher.watch(&path, move |event| {
-            if let EventKind::Modify(_) = event.kind {
+            if let EventKind::Modify(ModifyKind::Data(_)) = event.kind {
                 changed.store(true, Ordering::Release);
             }
         })?;
